@@ -133,6 +133,35 @@
     ].map(stepText);
   }
 
+  // Take the board out of the page: one CSV of the rows the filters show, so a reader can sort
+  // and compare it in a spreadsheet instead of trusting the page's order.
+  function csvCell(value) {
+    var text = value === null || value === undefined ? '' : String(value);
+    return /[",\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }
+  function boardCsv(list) {
+    var head = ['rank', 'protocol', 'category', 'chains', 'tvl_usd', 'change_7d', 'age_days', 'implied_value_usd', 'category_multiple', 'live_comparables', 'farm_steps'];
+    var lines = [head.join(',')];
+    list.forEach(function (r) {
+      lines.push([
+        r.rank, r.name, r.category || 'Other', (r.chains || []).join(' '), r.tvl_usd,
+        r.change_7d === null ? '' : r.change_7d, r.age_days === null ? '' : r.age_days,
+        r.implied_value_usd, r.category_multiple, r.category_comparables, farmSteps(r).length
+      ].map(csvCell).join(','));
+    });
+    return lines.join('\n') + '\n';
+  }
+  function downloadCsv() {
+    var blob = new Blob([boardCsv(sortedRows(rows()))], { type: 'text/csv;charset=utf-8' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'token-radar-board-' + DATA.as_of + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+  }
+
   function readHash() {
     var hash = window.location.hash.replace(/^#/, '');
     if (!hash) return;
@@ -250,12 +279,14 @@
     tvl.addEventListener('change', function () { state.minTvl = Number(tvl.value) || 0; writeHash(); render(); });
     var pre = el('button', { type: 'button', 'aria-pressed': state.tab === 'pre-token' ? 'true' : 'false', text: 'Pre-token', onclick: function () { state.tab = 'pre-token'; render(); } });
     var live = el('button', { type: 'button', 'aria-pressed': state.tab === 'live' ? 'true' : 'false', text: 'Live token', onclick: function () { state.tab = 'live'; render(); } });
+    var csv = el('button', { class: 'button', type: 'button', text: 'Download CSV', onclick: function () { downloadCsv(); } });
     return el('div', { class: 'controls' },
       el('div', { class: 'field' }, el('label', { for: 'q', text: 'Search' }), search),
       el('div', { class: 'field' }, el('label', { for: 'category', text: 'Category' }), cat),
       el('div', { class: 'field' }, el('label', { for: 'chain', text: 'Chain' }), chain),
       el('div', { class: 'field' }, el('label', { for: 'tvl', text: 'TVL' }), tvl),
       el('div', { class: 'field' }, el('span', { class: 'sub', text: 'Token status' }), el('div', { class: 'tabs' }, pre, live)),
+      el('div', { class: 'field' }, el('span', { class: 'sub', text: 'Take it with you' }), csv),
       el('span', { class: 'count', text: state.tab === 'pre-token' ? rows().length + ' rows shown' : DATA.live.length + ' live-token protocols' })
     );
   }
